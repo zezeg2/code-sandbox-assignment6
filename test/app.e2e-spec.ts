@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import { AppModule } from './../src/app.module';
 import { INestApplication } from '@nestjs/common';
 import { getConnection, Repository } from 'typeorm';
-import { User } from '../src/users/entities/user.entity';
+import { User, UserRole } from '../src/users/entities/user.entity';
 import { Podcast } from '../src/podcast/entities/podcast.entity';
 import { Episode } from '../src/podcast/entities/episode.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -14,6 +14,9 @@ import { UpdateEpisodeInput } from '../src/podcast/dtos/update-episode.dto';
 import { UpdatePodcastInput } from '../src/podcast/dtos/update-podcast.dto';
 import { CreateEpisodeInput } from '../src/podcast/dtos/create-episode.dto';
 import { EpisodesSearchInput } from '../src/podcast/dtos/podcast.dto';
+import { CreateAccountInput } from '../src/users/dtos/create-account.dto';
+import { JwtService } from '../src/jwt/jwt.service';
+import { EditProfileInput } from '../src/users/dtos/edit-profile.dto';
 
 const GRAPHQL_ENDPOINT = '/graphql';
 
@@ -30,6 +33,7 @@ describe('App (e2e)', () => {
   let episodeRepository: Repository<Episode>;
   let podcastService: PodcastsService;
   let usersService: UsersService;
+  let jwtService: JwtService;
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -45,6 +49,7 @@ describe('App (e2e)', () => {
     );
     podcastService = module.get(PodcastsService);
     usersService = module.get(UsersService);
+    jwtService = module.get(JwtService);
     app = module.createNestApplication();
     await app.init();
 
@@ -80,6 +85,12 @@ describe('App (e2e)', () => {
 
   const baseTest = (query: string) =>
     request(app.getHttpServer()).post(GRAPHQL_ENDPOINT).send({ query });
+  let jwtToken: string;
+  const authUserTest = (query: string) =>
+    request(app.getHttpServer())
+      .post(GRAPHQL_ENDPOINT)
+      .set('X-JWT', jwtToken)
+      .send({ query });
 
   describe('Podcasts Resolver', () => {
     describe('getAllPodcasts', () => {
@@ -705,10 +716,309 @@ describe('App (e2e)', () => {
     });
   });
   describe('Users Resolver', () => {
-    describe('me', () => {});
-    describe('seeProfile', () => {});
-    describe('createAccount', () => {});
-    describe('login', () => {});
-    describe('editProfile', () => {});
+    const { email, password, role }: CreateAccountInput = {
+      email: 'test@mail.com',
+      password: 'password',
+      role: UserRole.Listener,
+    };
+    describe('createAccount', () => {
+      let query = `mutation{
+        createAccount(input: {email: "${email}", password: "${password}", role: ${role} }){
+          ok
+          error
+        }
+      }`;
+      it('should create account', () => {
+        jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(undefined);
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  createAccount: { ok, error },
+                },
+              },
+            } = res;
+            expect(ok).toBe(true);
+            expect(error).toBe(null);
+          });
+      });
+
+      it('should fail to create account if same email already exists', () => {
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  createAccount: { ok, error },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('There is a user with that email already');
+          });
+      });
+
+      it('should create account', () => {
+        query = `mutation{
+        createAccount(input: {email: "another@mail.com", password: "${password}", role: ${role} }){
+          ok
+          error
+        }
+      }`;
+        jest.spyOn(userRepository, 'save').mockRejectedValueOnce(new Error());
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  createAccount: { ok, error },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('Could not create account');
+          });
+      });
+    });
+    describe('login', () => {
+      let query = `mutation{
+        login(input: {email: "${email}", password: "${password}"}){
+          ok
+          error
+          token
+        }
+      }`;
+      it('should success login and get token', () => {
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  login: { ok, error, token },
+                },
+              },
+            } = res;
+            expect(ok).toBe(true);
+            expect(error).toBe(null);
+            expect(token).toEqual(expect.any(String));
+            jwtToken = token;
+          });
+      });
+
+      it('should fail if user not found', () => {
+        jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(undefined);
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  login: { ok, error, token },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('User not found');
+            expect(token).toBe(null);
+          });
+      });
+
+      it('should fail if something error occurred', () => {
+        jest
+          .spyOn(userRepository, 'findOne')
+          .mockRejectedValueOnce(new Error('Something error'));
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  login: { ok, error, token },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe(null);
+            expect(token).toBe(null);
+          });
+      });
+
+      it('should fail if password wrong', () => {
+        query = `mutation{
+          login(input: {email: "${email}", password: "wrongPaxxword"}){
+            ok
+            error
+            token
+          }
+        }`;
+        return baseTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  login: { ok, error, token },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('Wrong password');
+            expect(token).toBe(null);
+          });
+      });
+    });
+    describe('me', () => {
+      const query = `{
+        me{
+          id
+        }
+      }`;
+      it('should return auth user', () => {
+        return authUserTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  me: { id },
+                },
+              },
+            } = res;
+            expect(id).toBe(1);
+          });
+      });
+    });
+    describe('seeProfile', () => {
+      let findUserId = 1;
+      let query = `{
+        seeProfile(${findUserId}){
+          ok
+          error
+          user{
+            id
+          }
+        }
+      }`;
+
+      it('should see profile', () => {
+        authUserTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  seeProfile: {
+                    ok,
+                    error,
+                    user: { id },
+                  },
+                },
+              },
+            } = res;
+            expect(ok).toBe(true);
+            expect(error).toBe(null);
+            expect(id).toBe(1);
+          });
+      });
+
+      it('should fail if user not exists', () => {
+        findUserId = 99;
+        query = `{
+        seeProfile(${findUserId}){
+          ok
+          error
+          user{
+            id
+          }
+        }
+      }`;
+        authUserTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  seeProfile: {
+                    ok,
+                    error,
+                    user: { id },
+                  },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('User Not Found');
+            expect(id).toBe(null);
+          });
+      });
+    });
+    describe('editProfile', () => {
+      const { newEmail, newPassword } = {
+        newEmail: 'newMail@mail.com',
+        newPassword: 'newPassword',
+      };
+      const query = `mutation{
+        editProfile(input:{email: "${newEmail}", password: "${newPassword}"}){
+          ok
+          error
+        }
+      }`;
+
+      // it('should fail if user not exists', () => {
+      //   jest
+      //     .spyOn(userRepository, 'findOneOrFail')
+      //     .mockRejectedValueOnce(new Error());
+      //   return authUserTest(query)
+      //     .expect(200)
+      //     .expect(res => {
+      //       const {
+      //         body: {
+      //           data: {
+      //             editProfile: { ok, error },
+      //           },
+      //         },
+      //       } = res;
+      //       expect(ok).toBe(false);
+      //       expect(error).toBe('Could not update profile');
+      //     });
+      // });
+
+      it('should fail if database save error', () => {
+        jest.spyOn(userRepository, 'save').mockRejectedValueOnce(new Error());
+        return authUserTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  editProfile: { ok, error },
+                },
+              },
+            } = res;
+            expect(ok).toBe(false);
+            expect(error).toBe('Could not update profile');
+          });
+      });
+      it('should update profile', () => {
+        return authUserTest(query)
+          .expect(200)
+          .expect(res => {
+            const {
+              body: {
+                data: {
+                  editProfile: { ok, error },
+                },
+              },
+            } = res;
+            expect(ok).toBe(true);
+            expect(error).toBe(null);
+          });
+      });
+    });
   });
 });
