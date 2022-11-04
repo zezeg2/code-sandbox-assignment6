@@ -38,8 +38,8 @@ __decorate([
     __metadata("design:type", Number)
 ], Podcast.prototype, "rating", void 0);
 __decorate([
-    typeorm_1.OneToMany(() => episode_entity_1.Episode, episode => episode.podcast),
-    graphql_1.Field(type => [episode_entity_1.Episode]),
+    typeorm_1.OneToMany(() => episode_entity_1.Episode, episode => episode.podcast, { nullable: true }),
+    graphql_1.Field(type => [episode_entity_1.Episode], { nullable: true }),
     __metadata("design:type", Array)
 ], Podcast.prototype, "episodes", void 0);
 Podcast = __decorate([

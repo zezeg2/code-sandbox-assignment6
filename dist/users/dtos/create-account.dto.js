@@ -8,9 +8,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateAccountOutput = exports.CreateAccountInput = void 0;
 const graphql_1 = require("@nestjs/graphql");
-const users_entity_1 = require("../entities/users.entity");
+const user_entity_1 = require("../entities/user.entity");
 const output_dto_1 = require("./output.dto");
-let CreateAccountInput = class CreateAccountInput extends graphql_1.PartialType(users_entity_1.Users) {
+let CreateAccountInput = class CreateAccountInput extends graphql_1.PartialType(user_entity_1.User) {
 };
 CreateAccountInput = __decorate([
     graphql_1.InputType()

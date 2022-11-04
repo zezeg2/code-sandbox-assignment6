@@ -24,7 +24,7 @@ export class Podcast extends CoreEntity {
   @Max(5)
   rating: number;
 
-  @OneToMany(() => Episode, episode => episode.podcast)
-  @Field(type => [Episode])
-  episodes: Episode[];
+  @OneToMany(() => Episode, episode => episode.podcast, { nullable: true })
+  @Field(type => [Episode], { nullable: true })
+  episodes?: Episode[];
 }

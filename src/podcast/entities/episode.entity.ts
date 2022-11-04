@@ -18,8 +18,9 @@ export class Episode extends CoreEntity {
   category: string;
 
   @ManyToOne(() => Podcast, podcast => podcast.episodes, {
+    nullable: true,
     onDelete: 'CASCADE',
   })
-  @Field(type => Podcast)
-  podcast: Podcast;
+  @Field(type => Podcast, { nullable: true })
+  podcast?: Podcast;
 }

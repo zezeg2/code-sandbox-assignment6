@@ -4,5 +4,5 @@ export declare class Podcast extends CoreEntity {
     title: string;
     category: string;
     rating: number;
-    episodes: Episode[];
+    episodes?: Episode[];
 }

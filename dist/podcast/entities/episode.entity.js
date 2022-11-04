@@ -31,9 +31,10 @@ __decorate([
 ], Episode.prototype, "category", void 0);
 __decorate([
     typeorm_1.ManyToOne(() => podcast_entity_1.Podcast, podcast => podcast.episodes, {
+        nullable: true,
         onDelete: 'CASCADE',
     }),
-    graphql_1.Field(type => podcast_entity_1.Podcast),
+    graphql_1.Field(type => podcast_entity_1.Podcast, { nullable: true }),
     __metadata("design:type", podcast_entity_1.Podcast)
 ], Episode.prototype, "podcast", void 0);
 Episode = __decorate([
